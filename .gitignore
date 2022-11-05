@@ -1,4 +1,9 @@
+# Image results
 /result
+
+# IDE settings
+.idea/misc.xml
+.idea/Predator-Prey-Simulation.iml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
