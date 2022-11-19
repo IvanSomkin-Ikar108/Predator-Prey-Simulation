@@ -255,13 +255,30 @@ class PredatorPreySimulation:
     def get_run_result(self, area_id: int):
         return self.run_result[area_id]
 
+    def get_migration_matrix(self, migration_rate: float, time_step: float):
+        matrix = np.zeros((len(self.areas), len(self.areas)), int).astype('float')
+        for area in self.areas:
+            matrix[area.id][area.id] = 1. + 2. * migration_rate * time_step
+            for neighbour in area.neighbors:
+                matrix[area.id][neighbour.id] = -1. * migration_rate * time_step
+        return matrix
+
+    def print_migration_matrix_abstraction(self, v: float, time_step: float):
+        for area in self.areas:
+            next_step: str = f'&\\left(1+{len(area.neighbors)}vdt\\right)x^{{n+1}}_{{{area.id}}}'
+            for neighbour in area.neighbors:
+                next_step += f'-vx^{{n+1}}_{{{neighbour.id}}}dt'
+            next_step += f'=x^{{n}}_{{{area.id}}}\\\\'
+            print(next_step)
+
 
 if __name__ == '__main__':
     simulation = PredatorPreySimulation(120, predator_migration_rate=0.1, prey_migration_rate=0.1)
     simulation.initialize_areas_with_image('./assets/brazil.png')
     simulation.set_output_directory('result')
-    simulation.run(steps=25, time_precision=2, data_precision=3, render=True, render_step_period=1)
-    simulation.get_run_result(48).add_figure(plt, 0)
-    simulation.get_run_result(51).add_figure(plt, 1)
-    simulation.get_run_result(49).add_figure(plt, 2)
+    simulation.run(steps=1, time_precision=2, data_precision=3, render=True, render_step_period=1)
+    simulation.get_area_matrix()
+    # simulation.get_run_result(48).add_figure(plt, 0)
+    # simulation.get_run_result(51).add_figure(plt, 1)
+    # simulation.get_run_result(49).add_figure(plt, 2)
     plt.show()
