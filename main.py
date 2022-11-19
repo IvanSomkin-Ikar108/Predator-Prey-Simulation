@@ -1,6 +1,8 @@
 import math
 import random
 import os
+from copy import deepcopy
+
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
@@ -16,23 +18,47 @@ class Area:
             img_pos: (int, int),
             predator: float = None,
             prey: float = None,
-            a0: float = None,
-            b: float = None,
-            c: float = None,
-            w_coef: float = random.uniform(0.5, 5.)
+            prey_reproduction_rate_start: float = None,
+            prey_reproduction_cycle_freq: float = None,
+            predator_eating_rate: float = None,
+            predator_dying_rate: float = None,
     ):
         self.id = None
         self.net_pos = net_pos
         self.img_pos = img_pos
-        self.predator = (predator if predator is not None else random.uniform(1., 2.))
-        self.prey = (prey if prey is not None else random.uniform(1., 10.))
+        self.predator = (
+            predator
+            if predator is not None
+            else random.uniform(1., 2.)
+        )
+        self.prey = (
+            prey
+            if prey is not None
+            else random.uniform(1., 10.)
+        )
         self.predator_next = self.predator
         self.prey_next = self.prey
         self.neighbors = []
-        self.a0 = (a0 if a0 is not None else random.uniform(1., 5.))
-        self.b = (b if b is not None else random.uniform(0.5, 1.))
-        self.c = (c if c is not None else random.uniform(1., 5.))
-        self.w_coef = w_coef
+        self.prey_reproduction_rate_start = (
+            prey_reproduction_rate_start
+            if prey_reproduction_rate_start is not None
+            else random.uniform(1., 5.)
+        )
+        self.prey_reproduction_cycle_freq = (
+            prey_reproduction_cycle_freq
+            if prey_reproduction_cycle_freq is not None
+            else random.uniform(0.5, 1.) * 2 * np.pi
+        )
+        self.predator_eating_rate = (
+            predator_eating_rate
+            if predator_eating_rate is not None
+            else random.uniform(0.5, 1.)
+        )
+        self.predator_dying_rate = (
+            predator_dying_rate
+            if predator_dying_rate is not None
+            else random.uniform(1., 5.)
+        )
 
     @staticmethod
     def hexagon_generator(img_x: int, img_y: int, hexagon_width: int):
@@ -53,16 +79,19 @@ class Area:
         draw.text((img_x - text_offset_x, img_y - text_offset_y), text=text, fill="black",
                   font=ImageFont.truetype("arial.ttf", size=text_size), align="left")
 
-    def a(self, t: float):
-        return self.a0 * (1 + math.sin(self.w_coef * math.pi * t))
+    def prey_reproduce_rate(self, t: float):
+        return (
+                self.prey_reproduction_rate_start *
+                (1 + math.sin(self.prey_reproduction_cycle_freq * t))
+        )
 
     def reproduce_interact(self, time: float, time_step: float, data_precision: int):
         t = time
         x = self.prey
         y = self.predator
-        a = self.a(t)
-        b = self.b
-        c = self.c
+        a = self.prey_reproduce_rate(t)
+        b = self.predator_eating_rate
+        c = self.predator_dying_rate
         dt = time_step
         x_next = x * (1 + a * dt - y * dt)
         y_next = y * (1 + b * x * dt - c * dt)
@@ -72,6 +101,7 @@ class Area:
             y_next = 0
         self.prey = round(x_next, data_precision)
         self.predator = round(y_next, data_precision)
+
     '''
     def migrate_next(self, time_step: float, data_precision: int,
                      predator_migration_rate: float = 0, prey_migration_rate: float = 0):
@@ -81,6 +111,7 @@ class Area:
         self.prey_next = round(self.prey + prey_migration_rate * prey_diff, data_precision)
         self.t += time_step
     '''
+
     def initialize_neighbors(self, areas: []):
         self.neighbors.clear()
         neighbor_positions: [] = self.calculate_neighbor_positions()
@@ -109,17 +140,21 @@ class PredatorPreyRunResult:
         self.area_id = area.id
         self.predator0 = area.predator
         self.prey0 = area.prey
-        self.a0 = area.a0
-        self.b = area.b
-        self.c = area.c
-        self.w_coef = area.w_coef
+        self.a0 = area.prey_reproduction_rate_start
+        self.b = area.predator_eating_rate
+        self.c = area.predator_dying_rate
+        self.w_coef = area.prey_reproduction_cycle_freq
         self.time_precision = time_precision
         self.data_precision = data_precision
         self.predator = []
         self.prey = []
         self.t = []
+        self.plt = None
+        self.fig_num = None
 
-    def add_figure(self, p: plt, fig_num: int):
+    def add_figure(self, p: plt, fig_num: int, prey_label: str = "Жертвы", predator_label: str = "Хищники"):
+        self.plt = plt
+        self.fig_num = fig_num
         t = self.t
         prey = self.prey
         predator = self.predator
@@ -134,10 +169,9 @@ class PredatorPreyRunResult:
         w_coef = self.w_coef
 
         p.figure(fig_num)
-        p.plot(t, prey, label='Жертвы')
-        p.plot(t, predator, label='Хищники')
-        if max(t) > 5:
-            p.xticks(np.arange(0, max(t) + 1, max(t) // 20), rotation=90, fontsize=10)
+        p.plot(t, prey, label=prey_label)
+        p.plot(t, predator, label=predator_label)
+        p.xticks(np.arange(0, max(t), max(t) / 20), rotation=90, fontsize=10)
         p.grid(True)
         p.legend()
         p.title(
@@ -149,6 +183,14 @@ class PredatorPreyRunResult:
         )
         p.xlabel('Время', fontsize=14)
         p.ylabel('Численность', fontsize=14)
+
+    def add_plot(self, p: plt, fig_num: int, predator_label: str, prey_label: str):
+        t = self.t
+
+        p.figure(fig_num)
+        p.plot(t, self.prey, label=prey_label)
+        p.plot(t, self.predator, label=predator_label)
+        p.legend()
 
 
 class PredatorPreySimulation:
@@ -170,6 +212,11 @@ class PredatorPreySimulation:
         self.prey_migration_rate = prey_migration_rate
         self.predator_migration_matrix = None
         self.prey_migration_matrix = None
+        self.steps = None
+        self.time_precision = None
+        self.data_precision = None
+        self.render = None
+        self.render_step_period = None
 
     def initialize_areas_with_image(self, img_path):
         with Image.open(img_path) as im:
@@ -211,10 +258,34 @@ class PredatorPreySimulation:
             a.id = i
             self.run_result[i] = PredatorPreyRunResult(a, time_precision, data_precision)
 
+    def set_area_parameters(
+            self,
+            predator: float,
+            prey: float,
+            prey_reproduction_rate_start: float,
+            prey_reproduction_cycle_freq: float,
+            predator_eating_rate: float,
+            predator_dying_rate: float,
+            all_areas: bool,
+            set_area_id: int
+    ):
+        if all_areas:
+            a_list = self.areas
+        else:
+            a_list = [self.areas[set_area_id]]
+
+        for a in a_list:
+            a.predator = predator
+            a.prey = prey
+            a.prey_reproduction_rate_start = prey_reproduction_rate_start
+            a.prey_reproduction_cycle_freq = prey_reproduction_cycle_freq
+            a.predator_eating_rate = predator_eating_rate
+            a.predator_dying_rate = predator_dying_rate
+
     def get_migration_matrix(self, migration_rate: float, time_step: float):
         matrix = np.zeros((len(self.areas), len(self.areas)), int).astype('float')
         for area in self.areas:
-            matrix[area.id][area.id] = 1. + 2. * migration_rate * time_step
+            matrix[area.id][area.id] = 1. + float(len(area.neighbors)) * migration_rate * time_step
             for neighbour in area.neighbors:
                 matrix[area.id][neighbour.id] = -1. * migration_rate * time_step
         return matrix
@@ -254,10 +325,18 @@ class PredatorPreySimulation:
     def run(self, steps: int, time_precision: int, data_precision: int,
             render: bool, render_step_period: int):
 
+        self.steps = steps
+        self.time_precision = time_precision
+        self.data_precision = data_precision
+        self.render = render
+        self.render_step_period = render_step_period
+
         time = 0
         time_step = math.pow(10, -time_precision)
         self.initialize_run_result(time_precision, data_precision)
         self.initialize_migration_matrices(time_step)
+        for a in self.areas:
+            self.add_run_result(a, time)
 
         prey_condition_number = self.get_condition_number(self.prey_migration_matrix)
         predator_condition_number = self.get_condition_number(self.predator_migration_matrix)
@@ -286,6 +365,15 @@ class PredatorPreySimulation:
             if render and step % render_step_period == 0:
                 self.render_step(f'{run_directory}/step_{step}.jpg')
 
+    def rerun(self):
+        self.run(
+            steps=self.steps,
+            time_precision=self.time_precision,
+            data_precision=self.data_precision,
+            render=self.render,
+            render_step_period=self.render_step_period
+        )
+
     def get_run_result(self, area_id: int):
         return self.run_result[area_id]
 
@@ -302,8 +390,24 @@ if __name__ == '__main__':
     simulation = PredatorPreySimulation(120, predator_migration_rate=1, prey_migration_rate=1)
     simulation.initialize_areas_with_image('./assets/brazil.png')
     simulation.set_output_directory('result')
-    simulation.run(steps=10, time_precision=2, data_precision=3, render=True, render_step_period=1)
-    simulation.get_run_result(48).add_figure(plt, 0)
-    simulation.get_run_result(51).add_figure(plt, 1)
-    simulation.get_run_result(49).add_figure(plt, 2)
+
+    focus_area_id = 48
+    saved_areas: [Area] = deepcopy(simulation.areas)
+    simulation.run(steps=1000, time_precision=2, data_precision=3, render=True, render_step_period=100)
+    simulation.get_run_result(focus_area_id).add_figure(plt, 0, "Жертвы - 1", "Хищники - 1")
+    simulation.get_run_result(focus_area_id).add_figure(plt, 1, "Жертвы - 1", "Хищники - 1")
+
+    simulation.areas = deepcopy(saved_areas)
+    simulation.set_area_parameters(
+        predator=saved_areas[focus_area_id].predator * 1.1,
+        prey=saved_areas[focus_area_id].prey * 1.1,
+        prey_reproduction_rate_start=saved_areas[focus_area_id].prey_reproduction_rate_start * 1.1,
+        prey_reproduction_cycle_freq=saved_areas[focus_area_id].prey_reproduction_cycle_freq,
+        predator_eating_rate=saved_areas[focus_area_id].predator_eating_rate * 1.1,
+        predator_dying_rate=saved_areas[focus_area_id].predator_dying_rate * 1.1,
+        all_areas=False,
+        set_area_id=focus_area_id
+    )
+    simulation.rerun()
+    simulation.get_run_result(focus_area_id).add_plot(plt, 0, "Жертвы - 2", "Хищники - 2")
     plt.show()
