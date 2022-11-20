@@ -319,8 +319,7 @@ class PredatorPreySimulation:
 
     @staticmethod
     def get_condition_number(matrix):
-        # np.linalg.norm(matrix) * np.linalg.norm(np.linalg.inv(matrix))
-        return np.linalg.cond(matrix)
+        return np.linalg.cond(matrix, 2)
 
     def run(self, steps: int, time_precision: int, data_precision: int,
             render: bool, render_step_period: int):
@@ -378,6 +377,7 @@ class PredatorPreySimulation:
         return self.run_result[area_id]
 
     def print_migration_matrix_abstraction(self, v: float, time_step: float):
+        # For TecX language
         for area in self.areas:
             next_step: str = f'&\\left(1+{len(area.neighbors)}vdt\\right)x^{{n+1}}_{{{area.id}}}'
             for neighbour in area.neighbors:
@@ -387,27 +387,72 @@ class PredatorPreySimulation:
 
 
 if __name__ == '__main__':
-    simulation = PredatorPreySimulation(120, predator_migration_rate=1, prey_migration_rate=1)
+    simulation = PredatorPreySimulation(120, predator_migration_rate=0.1, prey_migration_rate=0.1)
     simulation.initialize_areas_with_image('./assets/brazil.png')
     simulation.set_output_directory('result')
 
-    focus_area_id = 48
+    '''
+    # Сохраняем параметры запуска для последующего моделирования из тех же условий
     saved_areas: [Area] = deepcopy(simulation.areas)
-    simulation.run(steps=1000, time_precision=2, data_precision=3, render=True, render_step_period=100)
-    simulation.get_run_result(focus_area_id).add_figure(plt, 0, "Жертвы - 1", "Хищники - 1")
-    simulation.get_run_result(focus_area_id).add_figure(plt, 1, "Жертвы - 1", "Хищники - 1")
+    '''
 
+    # Опция render, включает запись модели в виде изображения каждые render_step_period шагов моделирования
+    simulation.run(steps=2500, time_precision=2, data_precision=3, render=False, render_step_period=100)
+
+    '''
+    focused_areas = [30, 8, 32]
+    
+    # Строим базовые графики для выбранных областей
+    simulation.get_run_result(30).add_figure(plt, 0)  # 2 neighbours
+    simulation.get_run_result(8).add_figure(plt, 1)  # 4 neighbours
+    simulation.get_run_result(32).add_figure(plt, 2)  # 6 neighbours
+    
+    # Строим общие графики для выбранных и областей и их соседей в схожих условиях смежности
+    simulation.get_run_result(30).add_figure(plt, 3, "Жертвы - 30", "Хищники - 30")  # 2 neighbours
+    simulation.get_run_result(21).add_figure(plt, 3, "Жертвы - 21", "Хищники - 21")  # 2 neighbours
+    simulation.get_run_result(8).add_figure(plt, 4, "Жертвы - 8", "Хищники - 8")  # 4 neighbours
+    simulation.get_run_result(13).add_figure(plt, 4, "Жертвы - 13", "Хищники - 13")  # 4 neighbours
+    simulation.get_run_result(32).add_figure(plt, 5, "Жертвы - 32", "Хищники - 32")  # 6 neighbours
+    simulation.get_run_result(33).add_figure(plt, 5, "Жертвы - 33", "Хищники - 33")  # 6 neighbours
+
+    # Создаём базовые графики для сравнения значений после изменения условий моделирования
+    simulation.get_run_result(30).add_figure(plt, 6, "Жертвы_def", "Хищники_def")  # 2 neighbours
+    simulation.get_run_result(8).add_figure(plt, 7, "Жертвы_def", "Хищники_def")  # 4 neighbours
+    simulation.get_run_result(32).add_figure(plt, 8, "Жертвы_def", "Хищники_def")  # 6 neighbours
+    
+    # Сохраняем первые результаты моделирования для последующего сравнения
+    def_run_results: dict = {}
+    for id in focused_areas:
+      def_run_results[id] = simulation.get_run_result(id)
+    
+    # Задаём для симуляции такие же условия, как и при первом запуске
     simulation.areas = deepcopy(saved_areas)
-    simulation.set_area_parameters(
-        predator=saved_areas[focus_area_id].predator * 1.1,
-        prey=saved_areas[focus_area_id].prey * 1.1,
-        prey_reproduction_rate_start=saved_areas[focus_area_id].prey_reproduction_rate_start * 1.1,
-        prey_reproduction_cycle_freq=saved_areas[focus_area_id].prey_reproduction_cycle_freq,
-        predator_eating_rate=saved_areas[focus_area_id].predator_eating_rate * 1.1,
-        predator_dying_rate=saved_areas[focus_area_id].predator_dying_rate * 1.1,
-        all_areas=False,
-        set_area_id=focus_area_id
-    )
+    
+    # Изменяем стартовые условия выбранных зон
+    for id in focused_areas:
+        simulation.set_area_parameters(
+            predator=saved_areas[id].predator * 1.1,
+            prey=saved_areas[id].prey * 1.1,
+            prey_reproduction_rate_start=saved_areas[id].prey_reproduction_rate_start * 1.1,
+            prey_reproduction_cycle_freq=saved_areas[id].prey_reproduction_cycle_freq,
+            predator_eating_rate=min(saved_areas[id].predator_eating_rate * 1.1, 1.),
+            predator_dying_rate=saved_areas[id].predator_dying_rate * 1.1,
+            all_areas=False,
+            set_area_id=id
+        )
+    
+    # Запуск симуляции при заданных условиях
     simulation.rerun()
-    simulation.get_run_result(focus_area_id).add_plot(plt, 0, "Жертвы - 2", "Хищники - 2")
+    
+    # Добавляем на ранее созданные графики результаты моделирования после внесения изменений
+    simulation.get_run_result(30).add_figure(plt, 6, "Жертвы_new", "Хищники_new")  # 2 neighbours
+    simulation.get_run_result(8).add_figure(plt, 7, "Жертвы_new", "Хищники_new")  # 4 neighbours
+    simulation.get_run_result(32).add_figure(plt, 8, "Жертвы_new", "Хищники_new")  # 6 neighbours
+    
+    #  Вычисляем среднее значение разницы для запуска с внесёнными изменениями    
+    for id in focused_areas:
+        print(id, np.mean(np.array(simulation.get_run_result(id).predator) - np.array(def_run_results[id].predator)),
+              np.mean(np.array(simulation.get_run_result(id).prey) - np.array(def_run_results[id].prey)))
+    
     plt.show()
+    '''
