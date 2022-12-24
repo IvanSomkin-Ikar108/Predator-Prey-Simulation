@@ -59,6 +59,8 @@ class Area:
             if predator_dying_rate is not None
             else random.uniform(1., 5.)
         )
+        self.prey_history = [0, 0, 0, self.prey]
+        self.predator_history = [0, 0, 0, self.predator]
 
     @staticmethod
     def hexagon_generator(img_x: int, img_y: int, hexagon_width: int):
@@ -85,7 +87,7 @@ class Area:
                 (1 + math.sin(self.prey_reproduction_cycle_freq * t))
         )
 
-    def reproduce_interact(self, time: float, time_step: float, data_precision: int):
+    def reproduce_interact_basic(self, time: float, time_step: float, data_precision: int):
         t = time
         x = self.prey
         y = self.predator
@@ -101,6 +103,35 @@ class Area:
             y_next = 0
         self.prey = round(x_next, data_precision)
         self.predator = round(y_next, data_precision)
+        self.prey_history.pop(0)
+        self.prey_history.append(self.prey)
+        self.predator_history.pop(0)
+        self.predator_history.append(self.predator)
+
+    def reproduce_interact_pro(self, time: float, time_step: float, data_precision: int):
+        t = time
+        a = self.prey_reproduce_rate(t)
+        b = self.predator_eating_rate
+        c = self.predator_dying_rate
+        dt = time_step
+        x_im3 = self.prey_history[1]
+        y_im3 = self.predator_history[1]
+        x_im2 = self.prey_history[2]
+        y_im2 = self.predator_history[2]
+        x_im1 = self.prey
+        y_im1 = self.predator
+        x_i = (3 * x_im1 * dt * (a - y_im1) + (10 * x_im1 - 5*x_im2 + x_im3)) / 6.
+        y_i = (3 * y_im1 * dt * (b * x_im1 - c) + (10 * y_im1 - 5*y_im2 + y_im3)) / 6
+        if x_i < 0:
+            x_i = 0
+        if y_i < 0:
+            y_i = 0
+        self.prey = round(x_i, data_precision)
+        self.predator = round(y_i, data_precision)
+        self.prey_history.pop(0)
+        self.prey_history.append(self.prey)
+        self.predator_history.pop(0)
+        self.predator_history.append(self.predator)
 
     '''
     def migrate_next(self, time_step: float, data_precision: int,
@@ -321,6 +352,22 @@ class PredatorPreySimulation:
     def get_condition_number(matrix):
         return np.linalg.cond(matrix, 2)
 
+    def prepare_areas(self, time_step: float, data_precision : int):
+        # 6 - это порядок (по 3 шага для точности по времени) точности по времени, прединициализируем начальные шаги
+        # для разностной схемы из 4 точек
+        time = 0
+        for step in range(0, 6):
+            if step % 2 == 0:
+                for a in self.areas:
+                    a.reproduce_interact_basic(time, time_step, data_precision)
+            else:
+                self.migrate()
+
+            time += time_step
+            for a in self.areas:
+                self.add_run_result(a, time)
+        return time
+
     def run(self, steps: int, time_precision: int, data_precision: int,
             render: bool, render_step_period: int):
 
@@ -330,10 +377,12 @@ class PredatorPreySimulation:
         self.render = render
         self.render_step_period = render_step_period
 
-        time = 0
         time_step = math.pow(10, -time_precision)
         self.initialize_run_result(time_precision, data_precision)
         self.initialize_migration_matrices(time_step)
+
+        time = self.prepare_areas(time_step, data_precision)
+
         for a in self.areas:
             self.add_run_result(a, time)
 
@@ -353,14 +402,15 @@ class PredatorPreySimulation:
         for step in range(0, steps):
             if step % 2 == 0:
                 for a in self.areas:
-                    a.reproduce_interact(time, time_step, data_precision)
+                    if a.id == 8:
+                        print(a.prey_history, a.predator_history)
+                    a.reproduce_interact_pro(time, time_step, data_precision)
             else:
                 self.migrate()
 
             time += time_step
             for a in self.areas:
                 self.add_run_result(a, time)
-
             if render and step % render_step_period == 0:
                 self.render_step(f'{run_directory}/step_{step}.jpg')
 
@@ -387,7 +437,7 @@ class PredatorPreySimulation:
 
 
 if __name__ == '__main__':
-    simulation = PredatorPreySimulation(120, predator_migration_rate=0.1, prey_migration_rate=0.1)
+    simulation = PredatorPreySimulation(120, predator_migration_rate=0.3, prey_migration_rate=0.3)
     simulation.initialize_areas_with_image('./assets/brazil.png')
     simulation.set_output_directory('result')
 
@@ -398,6 +448,9 @@ if __name__ == '__main__':
 
     # Опция render, включает запись модели в виде изображения каждые render_step_period шагов моделирования
     simulation.run(steps=2500, time_precision=2, data_precision=3, render=False, render_step_period=100)
+
+    simulation.get_run_result(8).add_figure(plt, 1)  # 4 neighbours
+    simulation.get_run_result(8).add_figure(plt, 4, "Жертвы - 8", "Хищники - 8")  # 4 neighbours
 
     '''
     focused_areas = [30, 8, 32]
@@ -453,6 +506,5 @@ if __name__ == '__main__':
     for id in focused_areas:
         print(id, np.mean(np.array(simulation.get_run_result(id).predator) - np.array(def_run_results[id].predator)),
               np.mean(np.array(simulation.get_run_result(id).prey) - np.array(def_run_results[id].prey)))
-    
-    plt.show()
     '''
+    plt.show()
