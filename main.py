@@ -417,8 +417,6 @@ class PredatorPreySimulation:
         for step in range(0, steps):
             if step % 2 == 0:
                 for a in self.areas:
-                    if a.id == 8:
-                        print(a.prey_history, a.predator_history)
                     a.reproduce_interact_pro(time, time_step, data_precision)
             else:
                 self.migrate()
@@ -443,33 +441,37 @@ class PredatorPreySimulation:
 
     def print_migration_matrix_abstraction(self):
         # For TecX language
-        for area in self.areas:
-            next_step: str = f'&\\left(1+{len(area.neighbors) + len(area.neighbors_2)}vdt\\right)x^{{n+1}}_{{{area.id}}}'
-            for neighbour in area.neighbors:
-                next_step += f'-vx^{{n+1}}_{{{neighbour.id}}}dt'
-            for neighbour_2 in area.neighbors_2:
-                next_step += f'-vx^{{n+1}}_{{{neighbour_2.id}}}dt'
-            next_step += f'=x^{{n}}_{{{area.id}}}\\\\'
+        # for area in self.areas:
+        #     next_step: str = f'&\\left(1+{len(area.neighbors) + len(area.neighbors_2)}vdt\\right)x^{{n+1}}_{{{area.id}}}-vdt('
+        #     for neighbour in area.neighbors:
+        #         next_step += f'+x^{{n+1}}_{{{neighbour.id}}}'
+        #     for neighbour_2 in area.neighbors_2:
+        #         next_step += f'+x^{{n+2}}_{{{neighbour_2.id}}}'
+        #     next_step += f')=x^{{n}}_{{{area.id}}}\\\\'
+        #     print(next_step)
+
+        for area in range(len(self.prey_migration_matrix)):
+            neighbors = np.sort(np.nonzero(self.prey_migration_matrix[area]))[0]
+            next_step = f'&\\left(1+{len(neighbors) - 1}vdt\\right)x^{{n+2}}_{{{area}}}'
+            for neighbour in neighbors:
+                if neighbour != area:
+                    next_step += f'-vx^{{n+2}}_{{{neighbour}}}dt'
+            next_step += f'=x^{{n+1}}_{{{area}}}\\\\'
             print(next_step)
 
 
+
 if __name__ == '__main__':
-    simulation = PredatorPreySimulation(120, predator_migration_rate=0.3, prey_migration_rate=0.3)
+    simulation = PredatorPreySimulation(120, predator_migration_rate=0.1, prey_migration_rate=0.1)
     simulation.initialize_areas_with_image('./assets/brazil.png')
     simulation.set_output_directory('result')
 
-    '''
     # Сохраняем параметры запуска для последующего моделирования из тех же условий
     saved_areas: [Area] = deepcopy(simulation.areas)
-    '''
 
     # Опция render, включает запись модели в виде изображения каждые render_step_period шагов моделирования
     simulation.run(steps=2500, time_precision=2, data_precision=3, render=False, render_step_period=100)
 
-    simulation.get_run_result(8).add_figure(plt, 1)  # 4 neighbours
-    simulation.get_run_result(8).add_figure(plt, 4, "Жертвы - 8", "Хищники - 8")  # 4 neighbours
-
-    '''
     focused_areas = [30, 8, 32]
     
     # Строим базовые графики для выбранных областей
@@ -523,5 +525,4 @@ if __name__ == '__main__':
     for id in focused_areas:
         print(id, np.mean(np.array(simulation.get_run_result(id).predator) - np.array(def_run_results[id].predator)),
               np.mean(np.array(simulation.get_run_result(id).prey) - np.array(def_run_results[id].prey)))
-    '''
     plt.show()
