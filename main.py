@@ -39,6 +39,7 @@ class Area:
         self.predator_next = self.predator
         self.prey_next = self.prey
         self.neighbors = []
+        self.neighbors_2 = []
         self.prey_reproduction_rate_start = (
             prey_reproduction_rate_start
             if prey_reproduction_rate_start is not None
@@ -162,6 +163,13 @@ class Area:
             (net_x + 1, net_y + net_x % 2)
         ]
 
+    def calculate_neighbours_2(self):
+        self.neighbors_2.clear()
+        for neighbor in self.neighbors:
+            for neighbor_2 in neighbor.neighbors:
+                if neighbor_2 is not self and neighbor_2 not in self.neighbors and neighbor_2 not in self.neighbors_2:
+                    self.neighbors_2.append(neighbor_2)
+
     def __str__(self):
         return f'{self.predator}, {self.prey}, {self.net_pos}, {self.img_pos}, {[n.net_pos for n in self.neighbors]}'
 
@@ -269,6 +277,8 @@ class PredatorPreySimulation:
 
             for a in self.areas:
                 a.initialize_neighbors(self.areas)
+            for a in self.areas:
+                a.calculate_neighbours_2()
 
     @staticmethod
     def is_pixel_black(img_bw, xy: (int, int)) -> bool:
@@ -316,9 +326,12 @@ class PredatorPreySimulation:
     def get_migration_matrix(self, migration_rate: float, time_step: float):
         matrix = np.zeros((len(self.areas), len(self.areas)), int).astype('float')
         for area in self.areas:
-            matrix[area.id][area.id] = 1. + float(len(area.neighbors)) * migration_rate * time_step
+            matrix[area.id][area.id] = 1. + float(len(area.neighbors)) * migration_rate * time_step +\
+                                            float(len(area.neighbors_2)) * migration_rate * time_step
             for neighbour in area.neighbors:
                 matrix[area.id][neighbour.id] = -1. * migration_rate * time_step
+            for neighbour_2 in area.neighbors_2:
+                matrix[area.id][neighbour_2.id] = -1. * migration_rate * time_step
         return matrix
 
     def initialize_migration_matrices(self, time_step: float):
@@ -381,6 +394,8 @@ class PredatorPreySimulation:
         self.initialize_run_result(time_precision, data_precision)
         self.initialize_migration_matrices(time_step)
 
+        self.print_migration_matrix_abstraction()
+
         time = self.prepare_areas(time_step, data_precision)
 
         for a in self.areas:
@@ -426,12 +441,14 @@ class PredatorPreySimulation:
     def get_run_result(self, area_id: int):
         return self.run_result[area_id]
 
-    def print_migration_matrix_abstraction(self, v: float, time_step: float):
+    def print_migration_matrix_abstraction(self):
         # For TecX language
         for area in self.areas:
-            next_step: str = f'&\\left(1+{len(area.neighbors)}vdt\\right)x^{{n+1}}_{{{area.id}}}'
+            next_step: str = f'&\\left(1+{len(area.neighbors) + len(area.neighbors_2)}vdt\\right)x^{{n+1}}_{{{area.id}}}'
             for neighbour in area.neighbors:
                 next_step += f'-vx^{{n+1}}_{{{neighbour.id}}}dt'
+            for neighbour_2 in area.neighbors_2:
+                next_step += f'-vx^{{n+1}}_{{{neighbour_2.id}}}dt'
             next_step += f'=x^{{n}}_{{{area.id}}}\\\\'
             print(next_step)
 
